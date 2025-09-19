@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings, Wrench } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, Users, Settings, Wrench, Smartphone, Database } from 'lucide-react';
 
 export function AdminNav() {
   return (
@@ -61,6 +61,20 @@ export function AdminNav() {
       </NavLink>
       
       <NavLink
+        to="/admin/repairs"
+        className={({ isActive }) =>
+          `flex items-center px-4 py-2 text-sm font-medium rounded-md ${
+            isActive
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          }`
+        }
+      >
+        <Smartphone className="mr-3 h-5 w-5" />
+        Repairs & BuyBack
+      </NavLink>
+      
+      <NavLink
         to="/admin/users"
         className={({ isActive }) =>
           `flex items-center px-4 py-2 text-sm font-medium rounded-md ${
@@ -86,6 +100,20 @@ export function AdminNav() {
       >
         <Settings className="mr-3 h-5 w-5" />
         Settings
+      </NavLink>
+      
+      <NavLink
+        to="/admin/database-test"
+        className={({ isActive }) =>
+          `flex items-center px-4 py-2 text-sm font-medium rounded-md ${
+            isActive
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          }`
+        }
+      >
+        <Database className="mr-3 h-5 w-5" />
+        Database Test
       </NavLink>
     </nav>
   );

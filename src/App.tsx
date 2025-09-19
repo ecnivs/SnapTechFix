@@ -26,6 +26,8 @@ import SystemStatus from './components/SystemStatus';
 import Chatbot from './components/Chatbot';
 import AdminLogin from './pages/AdminLogin';
 import EnhancedCMSDashboard from './pages/admin/EnhancedCMSDashboard';
+import RepairManagement from './pages/admin/RepairManagement';
+import DatabaseTest from './pages/admin/DatabaseTest';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -102,6 +104,8 @@ function App() {
               {/* Admin routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<EnhancedCMSDashboard />} />
+              <Route path="/admin/repairs" element={<RepairManagement />} />
+              <Route path="/admin/database-test" element={<DatabaseTest />} />
               
               {/* Test routes for notifications */}
               <Route path="/test-notifications" element={<NotificationTest />} />

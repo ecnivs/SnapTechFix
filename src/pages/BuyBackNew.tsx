@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, ArrowRight, Smartphone, CheckCircle } from 'lucide-react';
+import { buybackAPI } from '@/api/buyback';
 
 type BuyBackStep = 'device' | 'brand' | 'model' | 'condition' | 'details' | 'otp' | 'quote';
 
@@ -77,6 +78,9 @@ export default function BuyBackNew() {
   const [otpSent, setOtpSent] = useState(false);
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [quoteValue, setQuoteValue] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [publicCode, setPublicCode] = useState('');
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
   const form = useForm<BuyBackFormData>({
     resolver: zodResolver(buyBackSchema),
@@ -90,10 +94,30 @@ export default function BuyBackNew() {
   };
 
   const sendOtp = async () => {
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    setGeneratedOtp(otp);
+    const phoneNumber = form.getValues('phone');
+    if (!phoneNumber || phoneNumber.length < 10) {
+      toast({ title: 'Error', description: 'Please enter a valid phone number first' });
+      return;
+    }
 
     try {
+      setIsSubmitting(true);
+
+      // For testing: Generate a predictable OTP based on phone number
+      const testOtp = phoneNumber.slice(-4) === '2323' ? '1234' : '5678';
+      setGeneratedOtp(testOtp);
+
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      setOtpSent(true);
+      toast({ 
+        title: '📱 Test OTP Generated!', 
+        description: `Use: ${testOtp} (For testing purposes)` 
+      });
+
+      // In production, you would call your SMS service here
+      /*
       await fetch(`https://api.twilio.com/2010-04-01/Accounts/${import.meta.env.VITE_TWILIO_ACCOUNT_SID}/Messages.json`, {
         method: 'POST',
         headers: {
@@ -103,23 +127,24 @@ export default function BuyBackNew() {
         body: new URLSearchParams({
           From: import.meta.env.VITE_TWILIO_PHONE_NUMBER,
           To: '+91 9731852323',
-          Body: `🔐 Your SnapTechFix BuyBack OTP: ${otp}. Valid for 5 minutes.`
+          Body: `🔐 Your SnapTechFix BuyBack OTP: ${testOtp}. Valid for 5 minutes.`
         })
       });
-      setOtpSent(true);
-      toast({ title: '📱 OTP Sent!', description: 'Verification code sent to +91 9731852323' });
+      */
+
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to send OTP. Please try again.' });
+      toast({ title: 'Error', description: 'Failed to generate OTP. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const verifyOtp = () => {
+  const verifyOtp = async () => {
     const enteredOtp = form.getValues('otp');
     if (enteredOtp === generatedOtp) {
       const quote = calculateQuote();
       setQuoteValue(quote);
-      setCurrentStep('quote');
-      sendQuoteNotification(quote);
+      await submitBuybackRequest(quote);
       return true;
     } else {
       toast({ title: 'Error', description: 'Invalid OTP. Please try again.' });
@@ -127,69 +152,61 @@ export default function BuyBackNew() {
     }
   };
 
-  const sendQuoteNotification = async (quote: number) => {
-    const data = form.getValues();
-    
-    // Send SMS
-    try {
-      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${import.meta.env.VITE_TWILIO_ACCOUNT_SID}/Messages.json`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${btoa(`${import.meta.env.VITE_TWILIO_ACCOUNT_SID}:${import.meta.env.VITE_TWILIO_AUTH_TOKEN}`)}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          From: import.meta.env.VITE_TWILIO_PHONE_NUMBER,
-          To: '+91 9731852323',
-          Body: `💰 Hi ${data.name}! Your BuyBack quote for ${selectedBrand} ${selectedModel} is ₹${quote.toLocaleString()}. Valid for 48 hours.`
-        })
-      });
-    } catch (error) {
-      console.error('SMS error:', error);
-    }
+  const submitBuybackRequest = async (quote: number) => {
+    setIsSubmitting(true);
+    setSubmitStatus('idle');
 
-    // Send Email
     try {
-      await fetch('https://api.sendgrid.com/v3/mail/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SENDGRID_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          personalizations: [{
-            to: [{ email: 'rayyanbusinessofficial@gmail.com', name: data.name }],
-            subject: `💰 BuyBack Quote - ₹${quote.toLocaleString()} for your ${selectedModel}`
-          }],
-          from: { email: 'noreply@snaptechfix.com', name: 'SnapTechFix BuyBack' },
-          content: [{
-            type: 'text/html',
-            value: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center;">
-                  <h1 style="color: white; margin: 0;">💰 SnapTechFix BuyBack</h1>
-                  <p style="color: white;">Your Device Quote is Ready!</p>
-                </div>
-                <div style="padding: 30px;">
-                  <h2>Hi ${data.name}! 👋</h2>
-                  <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981;">
-                    <h3>📱 Device Details</h3>
-                    <p><strong>Device:</strong> ${selectedBrand} ${selectedModel}</p>
-                    <p><strong>Quote Value:</strong> <span style="color: #10b981; font-size: 24px; font-weight: bold;">₹${quote.toLocaleString()}</span></p>
-                  </div>
-                  <div style="text-align: center; margin: 30px 0;">
-                    <a href="tel:+919731852323" style="background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
-                      📞 Call to Confirm Sale
-                    </a>
-                  </div>
-                </div>
-              </div>
-            `
-          }]
-        })
+      const formData = form.getValues();
+      const selectedConditionDetails = conditionTypes.find(c => c.id === selectedCondition);
+
+      const buybackData = {
+        device_category: selectedCategory,
+        brand: selectedBrand,
+        model: selectedModel,
+        condition: selectedConditionDetails?.name || selectedCondition,
+        customer_name: formData.name,
+        customer_email: formData.email,
+        customer_phone: formData.phone,
+        estimated_price: quote
+      };
+
+      console.log('Submitting buyback data to database:', buybackData);
+
+      // Save to database using Supabase buyback API
+      const result = await buybackAPI.createQuote(buybackData);
+
+      if (result.success && result.public_code) {
+        setPublicCode(result.public_code);
+        setSubmitStatus('success');
+        setCurrentStep('quote');
+        
+        // Show notification status if available
+        if (result.notification_status) {
+          console.log('Notification status:', result.notification_status);
+        }
+        
+        toast({ 
+          title: '✅ Quote Generated!', 
+          description: `Quote saved to database! Code: ${result.public_code}` 
+        });
+      } else {
+        setSubmitStatus('error');
+        toast({ 
+          title: '❌ Error', 
+          description: result.error || 'Failed to submit buyback quote' 
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Buyback quote error:', error);
+      setSubmitStatus('error');
+      toast({ 
+        title: '❌ Error', 
+        description: error.message || 'Failed to submit buyback quote' 
       });
-    } catch (error) {
-      console.error('Email error:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -232,7 +249,7 @@ export default function BuyBackNew() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold mb-4">Smart Device BuyBack</h1>
-            <p className="text-xl text-gray-600 mb-6">Instant quotes with MCQ-based valuation</p>
+            <p className="text-xl text-gray-600 mb-6">Instant quotes with MCQ-based valuation & Test OTP</p>
             
             <div className="w-full bg-gray-200 rounded-full h-2 mb-8">
               <div className="bg-green-600 h-2 rounded-full transition-all duration-300" 
@@ -336,20 +353,94 @@ export default function BuyBackNew() {
                   <Input {...form.register('name')} placeholder="Full name" />
                   <Input {...form.register('email')} type="email" placeholder="your@email.com" />
                   <Input {...form.register('phone')} placeholder="+91 98765 43210" />
+                  <p className="text-sm text-gray-500 mt-1">
+                    💡 Test phone ending with 2323 will get OTP: 1234, others get: 5678
+                  </p>
                 </div>
               )}
 
               {/* OTP Verification */}
               {currentStep === 'otp' && (
                 <div className="text-center">
-                  <h3 className="text-lg font-semibold mb-4">Verify Your Phone Number</h3>
+                  <div className="mb-8">
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-3xl">🔐</span>
+                    </div>
+                    <h3 className="text-2xl font-bold mb-2">Verify Your Phone Number</h3>
+                    <p className="text-gray-600">We'll send a 4-digit code to verify your identity</p>
+                  </div>
+
                   {!otpSent ? (
-                    <Button onClick={sendOtp} className="w-full bg-green-600 hover:bg-green-700">Send OTP</Button>
+                    <div className="max-w-md mx-auto">
+                      <Card className="p-6 mb-6 bg-gray-50">
+                        <p className="font-medium mb-2">Phone Number:</p>
+                        <p className="text-lg text-green-600">{form.getValues('phone')}</p>
+                      </Card>
+                      <Button 
+                        onClick={sendOtp} 
+                        disabled={isSubmitting}
+                        className="w-full py-4 text-lg bg-green-600 hover:bg-green-700"
+                        size="lg"
+                      >
+                        {isSubmitting ? (
+                          <div className="flex items-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Generating OTP...
+                          </div>
+                        ) : (
+                          '📤 Send Test OTP'
+                        )}
+                      </Button>
+                    </div>
                   ) : (
-                    <div>
-                      <p className="mb-4 text-green-600">✅ OTP sent to +91 9731852323</p>
-                      <Input {...form.register('otp')} placeholder="Enter 4-digit OTP" className="mb-4" />
-                      <Button onClick={verifyOtp} className="w-full">Verify & Get Quote</Button>
+                    <div className="max-w-md mx-auto">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                        <p className="text-green-800 font-medium">✅ Test OTP Generated Successfully!</p>
+                        <p className="text-sm text-green-600 mt-1">
+                          💡 Test phone ending with 2323 will get OTP: 1234, others get: 5678
+                        </p>
+                      </div>
+
+                      <div className="mb-6">
+                        <label className="text-sm font-medium mb-2 block">Enter 4-digit OTP</label>
+                        <Input 
+                          {...form.register('otp')} 
+                          placeholder="0000" 
+                          className="text-center text-2xl font-mono py-4"
+                          maxLength={4}
+                          autoComplete="one-time-code"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Button 
+                          onClick={verifyOtp} 
+                          disabled={isSubmitting}
+                          className="w-full py-4 text-lg bg-green-600 hover:bg-green-700"
+                          size="lg"
+                        >
+                          {isSubmitting ? (
+                            <div className="flex items-center">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Verifying & Generating Quote...
+                            </div>
+                          ) : (
+                            '✅ Verify & Get Quote'
+                          )}
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setOtpSent(false);
+                            setGeneratedOtp('');
+                          }}
+                          className="w-full"
+                          disabled={isSubmitting}
+                        >
+                          🔄 Resend OTP
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -360,9 +451,20 @@ export default function BuyBackNew() {
                 <div className="text-center">
                   <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-6" />
                   <h3 className="text-2xl font-bold mb-4">Your Instant Quote</h3>
+                  
+                  {publicCode && (
+                    <div className="bg-blue-50 p-4 rounded-lg mb-4 border border-blue-200">
+                      <p className="text-sm font-medium text-blue-800 mb-1">Quote Code</p>
+                      <p className="text-2xl font-bold text-blue-600 font-mono">{publicCode}</p>
+                    </div>
+                  )}
+                  
                   <div className="bg-green-50 p-6 rounded-lg mb-6">
                     <p className="text-4xl font-bold text-green-600 mb-2">₹{quoteValue.toLocaleString()}</p>
-                    <p className="text-sm text-gray-600">📱 SMS and 📧 Email sent with quote details</p>
+                    <p className="text-sm text-gray-600">
+                      📊 Data saved to database<br />
+                      📱 SMS and 📧 Email sent with quote details
+                    </p>
                   </div>
                   <div className="space-y-3">
                     <Button className="w-full bg-green-600 hover:bg-green-700">

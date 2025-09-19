@@ -66,7 +66,7 @@ export interface RepairOrder {
 
 export const supabaseRepairAPI = {
   // Create a new repair booking
-  async createBooking(data: RepairFormData): Promise<{ success: boolean; tracking_code?: string; error?: string }> {
+  async createBooking(data: RepairFormData): Promise<{ success: boolean; tracking_code?: string; error?: string; notification_status?: any; message?: string }> {
     try {
       // Generate tracking code
       const tracking_code = `SNP${Date.now().toString().slice(-6)}`;
